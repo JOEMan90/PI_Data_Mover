@@ -1,6 +1,6 @@
 ﻿namespace PI_Data_Mover
 {
-    partial class Service1
+    partial class PIDataMover
     {
         /// <summary> 
         /// Required designer variable.
@@ -28,10 +28,18 @@
         /// </summary>
         private void InitializeComponent()
         {
-            components = new System.ComponentModel.Container();
-            this.ServiceName = "Service1";
+            this.PIDMEventLog = new System.Diagnostics.EventLog();
+            ((System.ComponentModel.ISupportInitialize)(this.PIDMEventLog)).BeginInit();
+            // 
+            // PIDataMover
+            // 
+            this.ServiceName = "PIDataMover";
+            ((System.ComponentModel.ISupportInitialize)(this.PIDMEventLog)).EndInit();
+
         }
 
         #endregion
+
+        private System.Diagnostics.EventLog PIDMEventLog;
     }
 }
