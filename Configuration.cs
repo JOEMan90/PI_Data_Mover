@@ -26,6 +26,7 @@ namespace PI_Data_Mover
         public static int MaxSnapshotEvents;
         public static int SourceArchiveMaxRate;
         public static int MaxRangeTime;
+        public static bool EnablePointCreation;
 
         public static Dictionary<ErrorTypes, string> Errors;
 
@@ -126,6 +127,11 @@ namespace PI_Data_Mover
             if (!Int32.TryParse(ConfigurationManager.AppSettings["MaxRangeTime"], out MaxRangeTime))
             {
                 MaxRangeTime = 600;
+            }
+
+            if (!Boolean.TryParse(ConfigurationManager.AppSettings["EnablePointCreation"], out EnablePointCreation))
+            {
+                EnablePointCreation = false;
             }
 
             PIPoints.ErrorTypes PIPointLoadingResult = PIPoints.LoadPIPointsFromFile();
