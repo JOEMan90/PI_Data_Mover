@@ -91,6 +91,7 @@ namespace PI_Data_Mover
         {
             //This method pulls a list of PI points from the designated server
             List<string> lstPIPoints_from_File = new List<string>();
+            bool isDestination = false;
 
             //Load the points from the point configuration file
             switch (serverType)
@@ -101,6 +102,7 @@ namespace PI_Data_Mover
 
                 case ServerType.Destination:
                     lstPIPoints_from_File = PIPoints_from_File.Select(x => @"\\" + ConfigurationParameters.DestinationPIDataArchive.Name + @"\" + x).ToList();
+                    isDestination = true;
                     break;
             }
 
@@ -108,23 +110,47 @@ namespace PI_Data_Mover
             AFKeyedResults<string, PIPoint> findPointsResult = PIPoint.FindPIPointsByPath(lstPIPoints_from_File);
 
             //Perform error checking/logging
-            CheckPIPointsForErrors(findPointsResult);
+            CheckPIPointsForErrors(findPointsResult, isDestination);
 
             return findPointsResult;
         }//LoadPIPointsFromServer
 
-        private static void CheckPIPointsForErrors(AFKeyedResults<string, PIPoint> findPointsResult)
+        private static void CheckPIPointsForErrors(AFKeyedResults<string, PIPoint> findPointsResult, bool isDestination = false)
         {
             //This method will run error checks on the list of PI points returned by the FindPIPoints call
             if (findPointsResult.HasErrors)
             {
-                //List<string> errorPIPoints = new List<string>();
-                foreach (var ePoint in findPointsResult.Errors)
+                List<string> pointsToBeCreated = new List<string>();
+
+                Parallel.ForEach(findPointsResult.Errors, (ePoint) =>
                 {
-                    //errorPIPoints.Add(ePoint.Key);
-                    Logger.Log("The application failed to load the following PI point: " + ePoint.Key + " with the following error: " + ePoint.Value, System.Diagnostics.EventLogEntryType.Warning);
+                    if (isDestination && ePoint.Value.HResult == -2146232969)
+                    {
+                        //This should mean that the point was not found, and thus, we will see if we should create it.
+
+                        //Pull out the PI point name from the full path used to find the point
+                        string pointName = ExtractPointName(ePoint.Key);
+
+                        Logger.Log("The application failed to load PI point <" + pointName + "> from the destination PI Data Archive but will attempt to create it. The error received during loading was: " + ePoint.Value.HResult + " | " + ePoint.Value.Message + " | " + ePoint.Value.InnerException + ".", System.Diagnostics.EventLogEntryType.Warning);
+
+                        pointsToBeCreated.Add(pointName);
+                    }
+                    else
+                    {
+                        //Remove the point from the point list
+                        string pointName = ExtractPointName(ePoint.Key);
+                        PIPoints_from_File = PIPoints_from_File.Where(s => s != PIPoints_from_File[Array.IndexOf(PIPoints_from_File, pointName)]).ToArray();
+                        Logger.Log("The application failed to load the PI point <" + pointName + "> from the source PI Data Archive. Therefore, no data will be collected for this point. The error received is as follows: " + ePoint.Value.HResult + " | " + ePoint.Value.Message + " | " + ePoint.Value.InnerException + ".", System.Diagnostics.EventLogEntryType.Error);
+                    }
+                });//Parallel.ForEach
+
+                //Check if there are pointed to be created and if so, create them.
+                if (pointsToBeCreated.Count != 0 && ConfigurationParameters.EnablePointCreation)
+                {
+                    CreatePIPoints(pointsToBeCreated);
                 }
-            }
+
+            }//if hasErrors
         }//CheckPIPointsForErrors
 
         private static void _FindPIPoints(ServerType serverType)
@@ -141,6 +167,51 @@ namespace PI_Data_Mover
                 {ErrorTypes.NoPIPointsLoaded_Destination, "No PI points were successfully loaded from the destination PI Data Archive." }
             };
         }
+
+        private static void CreatePIPoints(List<string> pointsToBeCreated)
+        {
+            //This method will create the associated PI points on the desintation PI Data Archive
+
+            //Create the PI points
+            var result = ConfigurationParameters.DestinationPIDataArchive.CreatePIPoints(pointsToBeCreated);
+
+            //Check for errors and log them
+            if (result.HasErrors)
+            {
+                Parallel.ForEach(result.Errors, (eResult) =>
+                {
+                    string logMsg = "The application failed to create the following PI point on the destination PI Data Archive: ";
+                    logMsg += eResult.Key;
+                    logMsg += ". The following error occurred: ";
+                    logMsg += eResult.Value + ".";
+                    Logger.Log(logMsg, System.Diagnostics.EventLogEntryType.Error);
+                });
+            }
+        }
+
+        private static string ExtractPointName(string pointNameWithPath, bool isDestination = false)
+        {
+            //This method takes a PI point name which includes the path (Such as \\MyPIDataArchive\MyTagName) and extracts the tag name
+
+            int serverNameLength = 0;
+
+            if (isDestination)
+            {
+                serverNameLength = ConfigurationParameters.DestinationPIDataArchive.Name.Length;
+            }
+            else
+            {
+                serverNameLength = ConfigurationParameters.SourcePIDataArchive.Name.Length;
+            }
+
+            //Name should have two preceeding '\' and one '\' as a separator for the tag name. This should be an illegal character for PI point name.
+            int serverNameLengthWithExtras = 3 + serverNameLength;
+
+            string pointName = pointNameWithPath.Substring(serverNameLengthWithExtras, pointNameWithPath.Length - serverNameLengthWithExtras);
+
+            return pointName;
+
+        }//ExtractPointName
 
         #endregion
 

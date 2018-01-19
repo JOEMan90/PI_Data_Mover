@@ -122,7 +122,7 @@ namespace PI_Data_Mover
             Logger.Log("Calculating time ranges for historical data recovery. This could take a minute but have no fear, data transfer will begin shortly!", System.Diagnostics.EventLogEntryType.Information);
 
             List<int> eventCounts = new List<int>();
-            int fractionPointCount = (int)Math.Ceiling((double)(PIPoints.Count / 10));
+            int fractionPointCount = (int)Math.Ceiling((double)(PIPoints.Count / 10) + 0.1);
 
             //Pull out a random selection of PI points
             Random _random = new Random();
@@ -130,7 +130,7 @@ namespace PI_Data_Mover
 
             for (int i = 0; i < 10 || i < fractionPointCount; i++)
             {
-                int randomIndex = _random.Next(PIPoints.Count);
+                int randomIndex = _random.Next(PIPoints.Count - 1);
                 PIPoint randomPIPoint = PIPoints.CurrentPIPoints_Source[randomIndex];
                 testerPIPoints.Add(randomPIPoint);
             }
